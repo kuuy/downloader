@@ -1,7 +1,6 @@
 package downloader
 
 import (
-  "context"
   "errors"
   "fmt"
   "io"
@@ -25,15 +24,6 @@ type Chunked struct {
   workers   int
   enableBar bool
   startTime int64
-}
-
-type DownloadState struct {
-  CurrentChunk   int
-  ChunkProgress  int64
-  LastUpdateTime time.Time
-  BytesPerSecond int64
-  IsPaused       bool
-  CancelFunc     context.CancelFunc
 }
 
 type DownloadResult struct {

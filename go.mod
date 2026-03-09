@@ -1,4 +1,4 @@
-module downloader
+module github.com/kuuy/downloader
 
 go 1.25.3
 
