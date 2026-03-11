@@ -24,6 +24,7 @@ type Chunked struct {
   workers   int
   enableBar bool
   startTime int64
+  header    http.Header
 }
 
 type DownloadResult struct {
@@ -40,12 +41,28 @@ func New(url string, dir, filename string, workers int, enableBar bool) (chunked
     workers:   workers,
     enableBar: enableBar,
     startTime: time.Now().UnixMilli(),
+    header:    make(http.Header),
   }
   return
 }
 
+func (d *Chunked) WithHeader(header http.Header) *Chunked {
+  d.header = header
+  return d
+}
+
 func (d *Chunked) Download() (filePath string, err error) {
-  resp, err := http.Head(d.url)
+  req, err := http.NewRequest(http.MethodHead, d.url, nil)
+  if err != nil {
+    return
+  }
+  for key, values := range d.header {
+    for _, value := range values {
+      req.Header.Add(key, value)
+    }
+  }
+
+  resp, err := d.client.Do(req)
   if err != nil {
     return
   }
@@ -91,7 +108,7 @@ func (d *Chunked) Download() (filePath string, err error) {
   }
 
   if err = d.verifyFileIntegrity(); err != nil {
-    fmt.Errorf("file integrity check failed: %w", err)
+    err = fmt.Errorf("file integrity check failed: %w", err)
     return
   }
 
@@ -136,7 +153,7 @@ func (d *Chunked) downloadChunks() (err error) {
 
       err = d.downloadChunkWithRetry(chunkPath, chunkStart, chunkEnd)
       if err != nil {
-        fmt.Errorf("download chunks %d failed %v\n", i, err)
+        log.Printf("download chunks %d failed %v\n", i, err)
       }
       downloadResultChan <- &DownloadResult{Err: err, Worker: i}
     }(i)
@@ -147,7 +164,7 @@ func (d *Chunked) downloadChunks() (err error) {
     case <-finishedChan:
       err = d.combineChunks()
       if err != nil {
-        fmt.Errorf("combine chunks failed %v\n", err)
+        err = fmt.Errorf("combine chunks failed %v", err)
       }
       return
     case result := <-downloadResultChan:
@@ -179,6 +196,12 @@ func (d *Chunked) downloadChunk(chunkPath string, start, end int64) (err error) 
   req, err := http.NewRequest(http.MethodGet, d.url, nil)
   if err != nil {
     return fmt.Errorf("failed to create request: %w", err)
+  }
+
+  for key, values := range d.header {
+    for _, value := range values {
+      req.Header.Add(key, value)
+    }
   }
   req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 
